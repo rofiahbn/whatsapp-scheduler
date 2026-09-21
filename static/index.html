@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jadwal Kontrol Nifas Via WhatsApp</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 850px; margin: 30px auto; padding: 0 20px; background-color: #f8f9fa; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        button:hover { background: #1ebd59; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .PENDING { color: orange; font-weight: bold; }
+        .SENT { color: green; font-weight: bold; }
+        .FAILED { color: red; font-weight: bold; }
+        .CANCELLED { color: #6c757d; font-weight: bold; }
+        .preview-box { background: #e8f5e9; padding: 12px; border-left: 4px solid #25D366; margin-top: 10px; font-style: italic; border-radius: 0 4px 4px 0; }
+        
+        /* CSS Tambahan untuk Tombol Batal */
+        .btn-cancel { 
+            background: #dc3545; 
+            color: white; 
+            border: none; 
+            padding: 6px 12px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 13px; 
+            font-weight: bold; 
+        }
+        .btn-cancel:hover { background: #bd2130; }
+    </style>
+</head>
+<body>
+
+    <h2>SIMONIKA</h2>
+
+    <div class="card">
+        <h3>Tambah Jadwal Kontrol</h3>
+        <form id="scheduleForm">
+            <div class="form-group">
+                <label>Nama Ibu / Client</label>
+                <input type="text" id="client_name" placeholder="Siti" required oninput="updatePreview()">
+            </div>
+            <div class="form-group">
+                <label>Nomor WhatsApp (dengan Kode Negara / 08xx)</label>
+                <input type="text" id="whatsapp_number" placeholder="08123456789" required>
+            </div>
+            <div class="form-group">
+                <label>Target Tanggal & Jam Kirim</label>
+                <input type="datetime-local" id="scheduled_time" required>
+            </div>
+            <div class="form-group">
+                <label>Jadwal Kontrol Nifas Ke-</label>
+                <select id="control_number" required onchange="updatePreview()">
+                    <option value="1">Kontrol Ke-1 (KF1 - Hari ke-3 s.d ke-7)</option>
+                    <option value="2">Kontrol Ke-2 (KF2 - Hari ke-8 s.d ke-28)</option>
+                    <option value="3">Kontrol Ke-3 (KF3 - Hari ke-29 s.d ke-42)</option>
+                </select>
+            </div>
+
+            <div class="preview-box">
+                <strong>Preview Pesan:</strong> <br>
+                <span id="messagePreview">Hi ibu [Nama], besok ada jadwal kontrol nifas ke-1. Mohon untuk hadir tepat waktu ya. Terima kasih.</span>
+            </div>
+            <br>
+            <button type="submit">Simpan Jadwal Pengingat</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Daftar Jadwal Pengingat</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nama Client</th>
+                    <th>WhatsApp</th>
+                    <th>Jadwal Kirim</th>
+                    <th>Jenis Kontrol</th>
+                    <th>Isi Pesan Otomatis</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody id="schedulesTable"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Fungsi untuk memperbarui preview pesan secara live
+        function updatePreview() {
+            const name = document.getElementById('client_name').value || '[Nama]';
+            const control = document.getElementById('control_number').value;
+            document.getElementById('messagePreview').innerText = 
+                `Hi ibu ${name}, besok ada jadwal kontrol nifas ke-${control}. Mohon untuk hadir tepat waktu ya. Terima kasih.`;
+        }
+
+        // Fungsi untuk mengambil dan menampilkan jadwal dari database
+        async function fetchSchedules() {
+            try {
+                const res = await fetch('/api/schedules');
+                if (!res.ok) return;
+                
+                const data = await res.json();
+                const tbody = document.getElementById('schedulesTable');
+                
+                if (!tbody) return;
+                tbody.innerHTML = '';
+
+                data.forEach(item => {
+                    // Hanya tampilkan tombol Batal jika status masih PENDING
+                    const actionButton = item.status === 'PENDING' 
+                        ? `<button class="btn-cancel" onclick="cancelSchedule(${item.id})">Batal</button>` 
+                        : '-';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${item.id}</td>
+                        <td>${item.client_name}</td>
+                        <td>${item.whatsapp_number}</td>
+                        <td>${new Date(item.scheduled_time).toLocaleString('id-ID')}</td>
+                        <td>Kontrol ke-${item.control_number || '-'}</td>
+                        <td><small>${item.message_content}</small></td>
+                        <td class="${item.status}">${item.status}</td>
+                        <td>${actionButton}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error('Gagal memuat jadwal:', err);
+            }
+        }
+
+        // Fungsi untuk membatalkan jadwal (panggil endpoint DELETE /api/schedule/{id})
+        async function cancelSchedule(id) {
+            if (!confirm(`Apakah Anda yakin ingin membatalkan jadwal ID #${id}?`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/schedule/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    alert('Jadwal berhasil dibatalkan!');
+                    fetchSchedules(); // Refresh isi tabel
+                } else {
+                    const err = await res.json();
+                    alert('Gagal membatalkan: ' + (err.detail || 'Terjadi kesalahan'));
+                }
+            } catch (err) {
+                alert('Gagal terhubung ke server: ' + err.message);
+            }
+        }
+
+        // Event listener saat form disubmit
+        document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const payload = {
+                client_name: document.getElementById('client_name').value,
+                whatsapp_number: document.getElementById('whatsapp_number').value,
+                scheduled_time: document.getElementById('scheduled_time').value,
+                control_number: parseInt(document.getElementById('control_number').value)
+            };
+
+            try {
+                const res = await fetch('/api/schedule', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    alert('Jadwal kontrol berhasil disimpan!');
+                    document.getElementById('scheduleForm').reset();
+                    updatePreview();
+                    fetchSchedules();
+                } else {
+                    const err = await res.json();
+                    alert('Gagal Menyimpan: ' + (err.detail || JSON.stringify(err)));
+                }
+            } catch (err) {
+                alert('Gagal terhubung ke server: ' + err.message);
+            }
+        });
+
+        // Jalankan fetchSchedules setelah halaman selesai dimuat sepenuhnya
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchSchedules();
+            // Refresh otomatis daftar tabel setiap 10 detik
+            setInterval(fetchSchedules, 10000);
+        });
+    </script>
+</body>
+</html>

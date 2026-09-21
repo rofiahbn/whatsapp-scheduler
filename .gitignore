@@ -1,0 +1,10 @@
+# Mengabaikan file variabel lingkungan rahasia
+.env
+
+# Mengabaikan folder virtual environment
+venv/
+env/
+__pycache__/
+
+# Mengabaikan file database lokal
+schedules.db
