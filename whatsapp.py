@@ -5,8 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 FONNTE_TOKEN = os.getenv("FONNTE_TOKEN")
-# Ubah "true" menjadi "false" di bagian belakang
-TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
 
 def send_whatsapp_message(to_number: str, message: str) -> tuple[bool, str]:
     """
