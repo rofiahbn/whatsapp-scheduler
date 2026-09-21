@@ -5,6 +5,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import database
 import scheduler
+import pytz
+
+# Definisikan timezone Jakarta
+JAKARTA_TZ = pytz.timezone('Asia/Jakarta')
 
 app = FastAPI(title="WhatsApp Scheduler - Kontrol Nifas")
 
@@ -27,11 +31,15 @@ class ScheduleRequest(BaseModel):
 @app.post("/api/schedule")
 def create_schedule(req: ScheduleRequest):
     try:
-        run_time = datetime.fromisoformat(req.scheduled_time)
+        # Parse string dari frontend dan set sebagai waktu Jakarta (naive ke localize)
+        naive_dt = datetime.fromisoformat(req.scheduled_time)
+        run_time = JAKARTA_TZ.localize(naive_dt) if naive_dt.tzinfo is None else naive_dt.astimezone(JAKARTA_TZ)
     except ValueError:
         raise HTTPException(status_code=400, detail="Format tanggal/waktu tidak valid. Gunakan YYYY-MM-DDTHH:MM")
 
-    if run_time <= datetime.now():
+    # Bandingkan dengan waktu sekarang yang sudah ber-timezone Jakarta
+    now_jakarta = datetime.now(JAKARTA_TZ)
+    if run_time <= now_jakarta:
         raise HTTPException(status_code=400, detail="Waktu jadwal harus di masa depan.")
 
     if req.control_number not in [1, 2, 3]:
