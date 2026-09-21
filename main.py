@@ -120,6 +120,13 @@ def cancel_schedule(schedule_id: int):
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.get("/api/cron/process")
+def cron_process_messages():
+    # Panggil fungsi reload / eksekusi jadwal PENDING yang jamnya sudah terlewat/tiba
+    import scheduler
+    scheduler.reload_pending_jobs()
+    return {"status": "processed"}
+
 @app.get("/")
 def read_root():
     return FileResponse("static/index.html")
