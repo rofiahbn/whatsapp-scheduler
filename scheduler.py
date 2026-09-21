@@ -93,10 +93,12 @@ def cancel_job(schedule_id: int):
         print(f"[SCHEDULER WARNING] Job ID {schedule_id} tidak ditemukan di memori scheduler: {e}")
 
 def reload_pending_jobs():
-    """Load unexecuted jobs from SQLite into APScheduler on server startup."""
+    """Load unexecuted jobs from database into APScheduler on server startup."""
     conn = _get_connection()
     cursor = conn.cursor()
-    now = datetime.now()
+    
+    # Ambil waktu sekarang dalam zona waktu Asia/Jakarta yang sadar timezone
+    now = datetime.now(JAKARTA_TZ)
     
     try:
         cursor.execute("SELECT id, scheduled_time FROM schedules WHERE status = 'PENDING'")
@@ -105,7 +107,13 @@ def reload_pending_jobs():
         for row in rows:
             try:
                 job_time_str = str(row["scheduled_time"]).replace("Z", "")
-                job_time = datetime.fromisoformat(job_time_str)
+                naive_job_time = datetime.fromisoformat(job_time_str)
+                
+                # Pastikan job_time memiliki timezone Asia/Jakarta
+                if naive_job_time.tzinfo is None:
+                    job_time = JAKARTA_TZ.localize(naive_job_time)
+                else:
+                    job_time = naive_job_time.astimezone(JAKARTA_TZ)
                 
                 if job_time >= now:
                     schedule_job(row["id"], job_time)
