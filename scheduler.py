@@ -4,8 +4,15 @@ from datetime import datetime
 import inspect
 import database
 import whatsapp
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.date import DateTrigger
+import pytz
 
-scheduler = BackgroundScheduler()
+# Tentukan timezone Jakarta
+JAKARTA_TZ = pytz.timezone('Asia/Jakarta')
+
+# Pass timezone ke scheduler
+scheduler = BackgroundScheduler(timezone=JAKARTA_TZ)
 
 def _get_connection():
     """Helper internal untuk mengambil objek connection dari database.py secara aman."""
@@ -57,15 +64,25 @@ def process_scheduled_message(schedule_id: int):
 
 def schedule_job(schedule_id: int, run_time: datetime):
     """Register a new job to APScheduler."""
+    
+    # 3. Pastikan run_time memiliki timezone Asia/Jakarta
+    if run_time.tzinfo is None:
+        # Jika run_time tidak punya timezone info, tempelkan timezone Jakarta
+        localized_run_time = JAKARTA_TZ.localize(run_time)
+    else:
+        # Jika sudah ada timezone lain, konversi ke Jakarta
+        localized_run_time = run_time.astimezone(JAKARTA_TZ)
+
     scheduler.add_job(
         func=process_scheduled_message,
-        trigger=DateTrigger(run_date=run_time),
+        trigger=DateTrigger(run_date=localized_run_time, timezone=JAKARTA_TZ),
         args=[schedule_id],
         id=str(schedule_id),
         replace_existing=True,
-        misfire_grace_time=60
+        misfire_grace_time=300 # Diubah ke 5 menit (300d) agar jika ada delay kecil tetap terisi
     )
-    print(f"[SCHEDULER] Job ID {schedule_id} berhasil didaftarkan untuk jam: {run_time}")
+    
+    print(f"[SCHEDULER] Job ID {schedule_id} berhasil didaftarkan untuk jam (WIB): {localized_run_time}")
 
 def cancel_job(schedule_id: int):
     """Remove a scheduled job from APScheduler memory."""
