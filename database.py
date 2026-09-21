@@ -6,20 +6,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Ambil URL Database dari .env
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    """
-    Jika DATABASE_URL ada (PostgreSQL / Neon), gunakan Neon.
-    Jika tidak ada (Lokal tanpa internet/env), gunakan SQLite biasa.
-    """
     if DATABASE_URL:
-        # Koneksi ke Neon PostgreSQL
-        conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+        # Tambahkan connect_timeout agar tidak melempar error mendadak saat handshake SSL
+        conn = psycopg2.connect(
+            DATABASE_URL, 
+            cursor_factory=RealDictCursor,
+            sslmode="require",
+            connect_timeout=10
+        )
         return conn
     else:
-        # Fallback SQLite Lokal
         conn = sqlite3.connect("schedules.db")
         conn.row_factory = sqlite3.Row
         return conn

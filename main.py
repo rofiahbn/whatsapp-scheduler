@@ -1,13 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from datetime import datetime
 import database
 import scheduler
-import sqlite3
-from fastapi import FastAPI, Depends, HTTPException
-from database import get_db
 
 app = FastAPI(title="WhatsApp Scheduler - Kontrol Nifas")
 
@@ -40,7 +37,6 @@ def create_schedule(req: ScheduleRequest):
     if req.control_number not in [1, 2, 3]:
         raise HTTPException(status_code=400, detail="Pilihan kontrol nifas hanya 1, 2, atau 3.")
 
-    # Otomatisasi isi pesan berdasarkan input
     message_content = (
         f"Hi ibu {req.client_name}, besok ada jadwal kontrol nifas ke-{req.control_number}. "
         f"Mohon untuk hadir tepat waktu ya. Terima kasih."
@@ -48,53 +44,82 @@ def create_schedule(req: ScheduleRequest):
 
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute(
-        """INSERT INTO schedules (client_name, whatsapp_number, scheduled_time, control_number, message_content)
-           VALUES (?, ?, ?, ?, ?)""",
-        (req.client_name, req.whatsapp_number, run_time.isoformat(), req.control_number, message_content)
-    )
-    schedule_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    
+    try:
+        # Tambahkan RETURNING id agar PostgreSQL mengembalikan ID baris baru
+        cursor.execute(
+            """INSERT INTO schedules (client_name, whatsapp_number, scheduled_time, control_number, message_content)
+               VALUES (%s, %s, %s, %s, %s)
+               RETURNING id""",
+            (req.client_name, req.whatsapp_number, run_time.isoformat(), req.control_number, message_content)
+        )
+        
+        # Samakan nama variabel menjadi schedule_id
+        schedule_id = cursor.fetchone()['id']
+        conn.commit()
 
-    # Daftarkan ke scheduler
-    scheduler.schedule_job(schedule_id, run_time)
+        # Daftarkan ke APScheduler
+        scheduler.schedule_job(schedule_id, run_time)
 
-    return {"status": "success", "id": schedule_id, "message": "Jadwal kontrol nifas berhasil disimpan"}
+        return {"status": "success", "id": schedule_id, "message": "Jadwal kontrol nifas berhasil disimpan"}
+
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    finally:
+        cursor.close()
+        conn.close()
 
 @app.get("/api/schedules")
 def list_schedules():
     conn = database.get_db()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM schedules ORDER BY created_at DESC")
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    try:
+        cursor.execute("SELECT * FROM schedules ORDER BY created_at DESC")
+        rows = cursor.fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.delete("/api/schedule/{schedule_id}")
+def cancel_schedule(schedule_id: int):
+    conn = database.get_db()
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute("SELECT status FROM schedules WHERE id = %s", (schedule_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Jadwal tidak ditemukan")
+        
+        if row["status"] != "PENDING":
+            raise HTTPException(status_code=400, detail="Hanya jadwal berstatus PENDING yang dapat dibatalkan")
+        
+        # Ubah '?' menjadi '%s'
+        cursor.execute(
+            "UPDATE schedules SET status = 'CANCELLED', response_log = 'Dibatalkan oleh pengguna' WHERE id = %s", 
+            (schedule_id,)
+        )
+        conn.commit()
+        
+        # Hapus dari memori scheduler
+        scheduler.cancel_job(schedule_id)
+        
+        return {"status": "success", "message": "Jadwal berhasil dibatalkan"}
+        
+    except Exception as e:
+        conn.rollback()
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def read_root():
     return FileResponse("static/index.html")
-
-@app.delete("/api/schedule/{schedule_id}")
-def cancel_schedule(schedule_id: int, db: sqlite3.Connection = Depends(database.get_db)):
-    cursor = db.cursor()
-    
-    cursor.execute("SELECT status FROM schedules WHERE id = %s", (schedule_id,))
-    row = cursor.fetchone()
-    
-    if not row:
-        raise HTTPException(status_code=404, detail="Jadwal tidak ditemukan")
-    
-    if row["status"] != "PENDING":
-        raise HTTPException(status_code=400, detail="Hanya jadwal berstatus PENDING yang dapat dibatalkan")
-    
-    # 1. Ubah status di database
-    cursor.execute("UPDATE schedules SET status = 'CANCELLED', response_log = 'Dibatalkan oleh pengguna' WHERE id = ?", (schedule_id,))
-    db.commit()
-    
-    # 2. Hapus job dari APScheduler memori
-    scheduler.cancel_job(schedule_id)
-    
-    return {"status": "success", "message": "Jadwal berhasil dibatalkan"}

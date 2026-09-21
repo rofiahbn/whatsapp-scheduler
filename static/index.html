@@ -12,6 +12,7 @@
         input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
         button { background: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
         button:hover { background: #1ebd59; }
+        button:disabled { background: #a5d6a7; cursor: not-allowed; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; }
@@ -21,7 +22,6 @@
         .CANCELLED { color: #6c757d; font-weight: bold; }
         .preview-box { background: #e8f5e9; padding: 12px; border-left: 4px solid #25D366; margin-top: 10px; font-style: italic; border-radius: 0 4px 4px 0; }
         
-        /* CSS Tambahan untuk Tombol Batal */
         .btn-cancel { 
             background: #dc3545; 
             color: white; 
@@ -68,7 +68,8 @@
                 <span id="messagePreview">Hi ibu [Nama], besok ada jadwal kontrol nifas ke-1. Mohon untuk hadir tepat waktu ya. Terima kasih.</span>
             </div>
             <br>
-            <button type="submit">Simpan Jadwal Pengingat</button>
+            <!-- DI PERBAIKI: Ditambahkan id="submitBtn" -->
+            <button type="submit" id="submitBtn">Simpan Jadwal Pengingat</button>
         </form>
     </div>
 
@@ -113,7 +114,6 @@
                 tbody.innerHTML = '';
 
                 data.forEach(item => {
-                    // Hanya tampilkan tombol Batal jika status masih PENDING
                     const actionButton = item.status === 'PENDING' 
                         ? `<button class="btn-cancel" onclick="cancelSchedule(${item.id})">Batal</button>` 
                         : '-';
@@ -136,7 +136,7 @@
             }
         }
 
-        // Fungsi untuk membatalkan jadwal (panggil endpoint DELETE /api/schedule/{id})
+        // Fungsi untuk membatalkan jadwal
         async function cancelSchedule(id) {
             if (!confirm(`Apakah Anda yakin ingin membatalkan jadwal ID #${id}?`)) {
                 return;
@@ -149,7 +149,7 @@
 
                 if (res.ok) {
                     alert('Jadwal berhasil dibatalkan!');
-                    fetchSchedules(); // Refresh isi tabel
+                    fetchSchedules();
                 } else {
                     const err = await res.json();
                     alert('Gagal membatalkan: ' + (err.detail || 'Terjadi kesalahan'));
@@ -159,11 +159,19 @@
             }
         }
 
-        // Event listener saat form disubmit
-        document.getElementById('scheduleForm').addEventListener('submit', async (e) => {
+        // Event listener saat form disubmit (DI PERBAIKI)
+        document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const payload = {
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.innerText;
+            
+            // Ubah tombol jadi disable dan loading
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Menyimpan...";
+
+            // DI PERBAIKI: Membuat payload data secara manual dari input form
+            const payloadData = {
                 client_name: document.getElementById('client_name').value,
                 whatsapp_number: document.getElementById('whatsapp_number').value,
                 scheduled_time: document.getElementById('scheduled_time').value,
@@ -171,30 +179,34 @@
             };
 
             try {
-                const res = await fetch('/api/schedule', {
+                const response = await fetch('/api/schedule', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payloadData)
                 });
 
-                if (res.ok) {
-                    alert('Jadwal kontrol berhasil disimpan!');
-                    document.getElementById('scheduleForm').reset();
-                    updatePreview();
-                    fetchSchedules();
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert("Jadwal berhasil disimpan!");
+                    this.reset(); // Clear isi input form
+                    updatePreview(); // Reset preview pesan
+                    fetchSchedules(); // Reload isi tabel
                 } else {
-                    const err = await res.json();
-                    alert('Gagal Menyimpan: ' + (err.detail || JSON.stringify(err)));
+                    alert("Gagal: " + (result.detail || "Terjadi kesalahan"));
                 }
-            } catch (err) {
-                alert('Gagal terhubung ke server: ' + err.message);
+            } catch (error) {
+                alert("Terjadi kesalahan koneksi.");
+            } finally {
+                // Kembalikan tombol ke kondisi semula
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalText;
             }
         });
 
-        // Jalankan fetchSchedules setelah halaman selesai dimuat sepenuhnya
+        // Jalankan fetchSchedules setelah halaman selesai dimuat
         document.addEventListener('DOMContentLoaded', () => {
             fetchSchedules();
-            // Refresh otomatis daftar tabel setiap 10 detik
             setInterval(fetchSchedules, 10000);
         });
     </script>

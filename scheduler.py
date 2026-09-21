@@ -48,7 +48,7 @@ def process_scheduled_message(schedule_id: int):
         # Update Status
         new_status = "SENT" if success else "FAILED"
         cursor.execute(
-            "UPDATE schedules SET status = ?, response_log = ? WHERE id = ?",
+            "UPDATE schedules SET status = %s, response_log = %s WHERE id = %s",
             (new_status, log_msg, schedule_id)
         )
         conn.commit()
@@ -95,7 +95,7 @@ def reload_pending_jobs():
                 else:
                     print(f"[SCHEDULER] Job ID {row['id']} terlewat. Jam Target: {job_time}, Jam Sekarang: {now}")
                     cursor.execute(
-                        "UPDATE schedules SET status = 'FAILED', response_log = 'Missed execution time' WHERE id = ?",
+                        "UPDATE schedules SET status = 'FAILED', response_log = 'Missed execution time' WHERE id = %s",
                         (row["id"],)
                     )
             except Exception as e:
