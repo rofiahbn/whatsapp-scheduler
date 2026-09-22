@@ -9,11 +9,19 @@
         .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .form-group { margin-bottom: 12px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { background: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        input, select { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+        button { background: #25D366; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; width: 100%; }
         button:hover { background: #1ebd59; }
         button:disabled { background: #a5d6a7; cursor: not-allowed; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        
+        /* Pembungkus tabel agar responsif di layar HP */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 600px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background-color: #f2f2f2; }
         .PENDING { color: orange; font-weight: bold; }
@@ -31,8 +39,18 @@
             cursor: pointer; 
             font-size: 13px; 
             font-weight: bold; 
+            width: auto;
         }
         .btn-cancel:hover { background: #bd2130; }
+
+        /* Khusus Layar HP / Mobile */
+        @media (max-width: 600px) {
+            body { margin: 15px auto; padding: 0 10px; }
+            .card { padding: 15px; }
+            h2 { font-size: 22px; text-align: center; }
+            h3 { font-size: 18px; }
+            input, select, button { padding: 12px; }
+        }
     </style>
 </head>
 <body>
@@ -75,21 +93,23 @@
 
     <div class="card">
         <h3>Daftar Jadwal Pengingat</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nama Client</th>
-                    <th>WhatsApp</th>
-                    <th>Jadwal Kirim</th>
-                    <th>Jenis Kontrol</th>
-                    <th>Isi Pesan Otomatis</th>
-                    <th>Status</th>
-                    <th>Aksi</th>
-                </tr>
-            </thead>
-            <tbody id="schedulesTable"></tbody>
-        </table>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nama Client</th>
+                        <th>WhatsApp</th>
+                        <th>Jadwal Kirim</th>
+                        <th>Jenis Kontrol</th>
+                        <th>Isi Pesan Otomatis</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="schedulesTable"></tbody>
+            </table>
+        </div>
     </div>
 
     <script>
